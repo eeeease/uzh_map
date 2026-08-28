@@ -1,6 +1,6 @@
 # UZH × ETH Mensa Map
 
-一个纯静态的苏黎世大学 (UZH) 与苏黎世联邦理工学院 (ETH) 食堂地图，支持中文、English 和 Deutsch。使用 Leaflet、OpenStreetMap、ETH Cookpit、UZH FOOD2050 与 Wikimedia Commons。
+一个同时适配手机与桌面 Web 的苏黎世大学 (UZH) 与苏黎世联邦理工学院 (ETH) 食堂地图，支持中文、English 和 Deutsch。使用 Leaflet、OpenStreetMap、ETH Cookpit、UZH FOOD2050 与 Wikimedia Commons。
 
 ## 本地运行
 
@@ -16,12 +16,14 @@ python3 -m http.server 8000
 
 ## 功能
 
-- 中文、英文、德语界面
+- 中文、英文、德语界面，中文模式附带可靠的菜品分类标签
+- 独立地图模式和列表模式，手机与桌面共享筛选状态
 - 按学校、午餐、晚餐和营业状态过滤
-- 按距离排序并显示当前位置
-- 聚合展示今日菜品和本地静态示意图片
-- 查看 UZH FOOD2050 / ETH Cookpit 菜单
-- 每周自动更新菜单快照、图片和图片许可信息
+- 首次打开主动请求位置权限，按距离排序，并将地图限制在苏黎世
+- 按周一至周五和菜品类别反查餐厅，例如查找哪些餐厅在哪天提供米饭
+- 餐厅详情展示完整的五个工作日菜单
+- 展示经过视觉审核的本地类别图及图片许可信息
+- 每周自动更新 ETH Cookpit 与 UZH FOOD2050 菜单快照
 
 ## 菜单数据更新
 
@@ -31,6 +33,6 @@ python3 -m http.server 8000
 node scripts/update-menus.mjs
 ```
 
-脚本生成 `data/menu-week.json` 并把 Wikimedia Commons 的相似菜品缩略图下载到 `images/dishes/`。图片作者、许可和原始文件页保存在 JSON 中，并在网页上显示。
+脚本生成周一至周五的 `data/menu-week.json`，为每道菜建立可多选的主食、蛋白质和菜品类型标签，并把 Wikimedia Commons 的审核类别图下载到 `images/dishes/`。图片作者、许可、匹配类型、验证状态和原始文件页保存在 JSON 中，并在网页上显示。
 
-`.github/workflows/update-menus.yml` 每周一自动运行，更新 `main` 和用于 GitHub Pages 的 `gh-pages` 分支。ETH Cookpit 提供完整周数据；UZH FOOD2050 当前公开页面只保证当前日期，因此自动化会保存运行当天可抽取的 UZH 菜品，并在网页详情中保留实时菜单作为回退。
+`.github/workflows/update-menus.yml` 每周一自动运行，更新 `main` 和用于 GitHub Pages 的 `gh-pages` 分支。ETH 使用 Cookpit 周接口；UZH 使用 FOOD2050 的 `/menu/weekly` 页面，并从带日期的真实菜品链接读取菜名和描述。任一学校的数据缺失或校验失败时，脚本退出且不会覆盖上一版线上数据。
