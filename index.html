@@ -48,8 +48,10 @@
       min-width:0; min-height:0; overflow:auto; background:var(--panel); border-left:1px solid var(--line);
       display:flex; flex-direction:column;
     }
-    #listView, #detailView { padding:14px; }
-    #detailView { display:none; }
+    #listView, #dishesView, #detailView { padding:14px; }
+    #dishesView, #detailView { display:none; }
+    .viewSwitch { margin-bottom:12px; width:100%; }
+    .viewSwitch button { flex:1 1 0; }
     .listHead { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
     .listHead h2 { margin:0; font-size:18px; }
     .count { margin-left:auto; color:var(--muted); font-size:12px; }
@@ -100,6 +102,17 @@
     .menuName { font-weight:750; line-height:1.35; }
     .menuDesc { margin-top:5px; color:#667085; font-size:12px; line-height:1.42; }
     .menuPrice { margin-top:7px; font-size:12px; font-weight:800; }
+    .dishGrid { display:grid; gap:10px; }
+    .dishCard { overflow:hidden; border:1px solid var(--line); border-radius:15px; background:#fff; }
+    .dishImage { display:block; width:100%; height:165px; object-fit:cover; background:#eef1f5; }
+    .dishBody { padding:11px; }
+    .dishTop { display:flex; align-items:flex-start; gap:8px; }
+    .dishTitle { flex:1; font-weight:800; line-height:1.3; }
+    .dishRestaurant { margin-top:5px; color:var(--muted); font-size:12px; }
+    .dishDesc { margin-top:7px; color:#475467; font-size:12px; line-height:1.4; }
+    .dishAttribution { margin-top:8px; font-size:10px; color:var(--muted); line-height:1.35; }
+    .dishAttribution a { text-decoration:underline; }
+    .dataStamp { margin:0 0 10px; font-size:11px; color:var(--muted); line-height:1.4; }
     .notice { border:1px solid #fedf89; background:#fffaeb; color:#7a2e0e; border-radius:12px; padding:10px 11px; font-size:12px; line-height:1.45; }
     .notice.error { border-color:#fecdca; background:#fef3f2; color:#b42318; }
     .frameWrap { border:1px solid var(--line); border-radius:14px; overflow:hidden; background:#fff; }
@@ -156,7 +169,7 @@
       .seg button { flex:1 1 auto; padding:8px 7px; }
       .controls { width:100%; }
       .btn { padding:8px 10px; }
-      #listView, #detailView { padding:12px; }
+      #listView, #dishesView, #detailView { padding:12px; }
       .frame { height:500px; }
     }
   </style>
@@ -170,6 +183,11 @@
         <div class="subtitle">支持“只看晚餐 / 现在营业” · 地图找最近食堂 · 菜单直接由浏览器请求</div>
       </div>
       <div class="controls">
+        <div class="seg" aria-label="Language">
+          <button class="langFilter active" data-lang="zh">中文</button>
+          <button class="langFilter" data-lang="en">EN</button>
+          <button class="langFilter" data-lang="de">DE</button>
+        </div>
         <div class="seg" aria-label="学校筛选">
           <button class="schoolFilter active" data-value="ALL">全部</button>
           <button class="schoolFilter" data-value="UZH">UZH</button>
@@ -194,12 +212,16 @@
       <div class="legend">
         <div><span class="dot uzh"></span>UZH</div>
         <div><span class="dot eth"></span>ETH</div>
-        <div><span class="dot me"></span>我的位置</div>
+        <div><span class="dot me"></span><span id="legendMe">我的位置</span></div>
       </div>
     </main>
 
     <aside>
       <section id="listView">
+        <div class="seg viewSwitch" aria-label="内容视图">
+          <button class="viewFilter active" data-view="restaurants">餐厅</button>
+          <button class="viewFilter" data-view="dishes">今日菜品</button>
+        </div>
         <div class="listHead">
           <h2>餐厅列表</h2>
           <span id="count" class="count"></span>
@@ -215,6 +237,19 @@
         </div>
       </section>
 
+      <section id="dishesView">
+        <div class="seg viewSwitch" aria-label="内容视图">
+          <button class="viewFilter" data-view="restaurants">餐厅</button>
+          <button class="viewFilter active" data-view="dishes">今日菜品</button>
+        </div>
+        <div class="listHead">
+          <h2 id="dishesTitle">今日菜品</h2>
+          <span id="dishCount" class="count"></span>
+        </div>
+        <div id="dataStamp" class="dataStamp"></div>
+        <div id="dishCards" class="dishGrid"></div>
+      </section>
+
       <section id="detailView">
         <button id="backBtn" class="back">← 返回列表</button>
         <div id="detail"></div>
@@ -228,6 +263,92 @@
 <script>
 (() => {
   "use strict";
+
+  const messages = {
+    zh: {
+      subtitle:"支持晚餐/营业中筛选 · 地图找最近食堂 · 每周更新菜品与图片",
+      all:"全部", lunch:"午餐", dinner:"晚餐", daytime:"白天", openNow:"现在营业",
+      closed:"已结束 / 未开始", locate:"◎ 定位我", fit:"显示全部", myLocation:"我的位置",
+      restaurants:"餐厅", restaurantList:"餐厅列表", todayDishes:"今日菜品",
+      schoolFilter:"学校筛选", mealFilter:"餐次筛选", contentView:"内容视图",
+      search:"搜索餐厅 / 校区…", places:"{n} 家", dishes:"{n} 道",
+      quick:"当前结果中：<strong>{total}</strong> 家 · 可晚餐 <strong>{dinner}</strong> 家 · 现在营业 <strong>{open}</strong> 家 · 最近的是 <strong>{nearest}</strong>",
+      notLocated:"未定位", noRestaurants:"没有符合当前筛选条件的餐厅",
+      back:"← 返回列表", viewMenu:"查看菜单", service:"餐次", selectService:"选择餐次",
+      todayMenu:"今日菜单 · {date}", fetchEth:"正在读取 ETH Cookpit 菜单…",
+      noEth:"Cookpit 今天没有返回这个餐次的菜单。可能是休息、假期或菜单尚未发布。",
+      ethError:"未能读取 ETH Cookpit，可能是网络策略或接口暂时不可用。",
+      openEth:"打开 ETH 官方周菜单 ↗", sourceEth:"数据源：ETH Cookpit；页面优先使用每周静态快照。",
+      openMenu:"在新标签页打开菜单 ↗", sourceUzh:"数据源：UZH FOOD2050；页面优先使用每周静态快照。",
+      openOsm:"在 OSM 打开 ↗", official:"官方餐厅页 ↗", noService:"没有找到该餐次配置。",
+      detailTip:"提示：学校可能在学期或假期临时调整菜单与开放时间。",
+      locating:"正在定位…", noGeo:"当前浏览器不支持定位，请直接点击地图设定位置。",
+      denied:"定位未授权。你可以点击地图任意位置，将其设为当前位置。",
+      nearest:"最近：{name} · {distance}", confirmLocation:"把这里设为你的当前位置，用来计算最近餐厅吗？",
+      dataUpdated:"菜单快照更新于 {time} · 覆盖 {start} 至 {end}", noDishes:"今天的静态菜单尚无菜品，请查看餐厅详情中的实时菜单。",
+      imageSimilar:"示意图片", imageCredit:"图片：{author} · {license}", snapshot:"每周菜单快照",
+      notes:"说明：<br>1. 晚餐筛选按餐厅是否提供晚餐判断；学校可能临时调整。<br>2. 定位和距离计算完全在浏览器本地完成。<br>3. 点击地图可手动设置当前位置。"
+    },
+    en: {
+      subtitle:"Filter dinner/open venues · find the nearest mensa · weekly dishes and images",
+      all:"All", lunch:"Lunch", dinner:"Dinner", daytime:"Daytime", openNow:"Open now",
+      closed:"Closed / not started", locate:"◎ Locate me", fit:"Show all", myLocation:"My location",
+      restaurants:"Restaurants", restaurantList:"Restaurant list", todayDishes:"Today's dishes",
+      schoolFilter:"School filter", mealFilter:"Meal filter", contentView:"Content view",
+      search:"Search restaurant / campus…", places:"{n} places", dishes:"{n} dishes",
+      quick:"Results: <strong>{total}</strong> · dinner <strong>{dinner}</strong> · open now <strong>{open}</strong> · nearest <strong>{nearest}</strong>",
+      notLocated:"not located", noRestaurants:"No restaurants match the current filters",
+      back:"← Back to list", viewMenu:"View menu", service:"Service", selectService:"Choose service",
+      todayMenu:"Today's menu · {date}", fetchEth:"Loading the ETH Cookpit menu…",
+      noEth:"Cookpit has no menu for this service today. It may be a holiday or not yet published.",
+      ethError:"ETH Cookpit could not be loaded. The API or network may be temporarily unavailable.",
+      openEth:"Open ETH weekly menu ↗", sourceEth:"Source: ETH Cookpit; the weekly static snapshot is used first.",
+      openMenu:"Open menu in a new tab ↗", sourceUzh:"Source: UZH FOOD2050; the weekly static snapshot is used first.",
+      openOsm:"Open in OSM ↗", official:"Official restaurant page ↗", noService:"No service configuration found.",
+      detailTip:"Note: menus and opening hours may change during terms and holidays.",
+      locating:"Locating…", noGeo:"Geolocation is unavailable; click the map to set a position.",
+      denied:"Location was not allowed. Click the map to set your position.",
+      nearest:"Nearest: {name} · {distance}", confirmLocation:"Use this point as your location for distance calculations?",
+      dataUpdated:"Menu snapshot updated {time} · covers {start} to {end}", noDishes:"No dishes are available in today's static snapshot. Check live menus in restaurant details.",
+      imageSimilar:"Illustrative image", imageCredit:"Image: {author} · {license}", snapshot:"Weekly menu snapshot",
+      notes:"Notes:<br>1. Dinner filtering checks whether a venue offers dinner; schedules can change.<br>2. Location and distance calculations stay in your browser.<br>3. Click the map to set your location manually."
+    },
+    de: {
+      subtitle:"Abendessen/geöffnet filtern · nächste Mensa finden · wöchentliche Gerichte und Bilder",
+      all:"Alle", lunch:"Mittagessen", dinner:"Abendessen", daytime:"Tagsüber", openNow:"Jetzt geöffnet",
+      closed:"Geschlossen / noch nicht geöffnet", locate:"◎ Mein Standort", fit:"Alle anzeigen", myLocation:"Mein Standort",
+      restaurants:"Mensen", restaurantList:"Mensa-Liste", todayDishes:"Heutige Gerichte",
+      schoolFilter:"Hochschulfilter", mealFilter:"Mahlzeitenfilter", contentView:"Inhaltsansicht",
+      search:"Mensa / Campus suchen…", places:"{n} Mensen", dishes:"{n} Gerichte",
+      quick:"Ergebnisse: <strong>{total}</strong> · Abendessen <strong>{dinner}</strong> · jetzt geöffnet <strong>{open}</strong> · nächste <strong>{nearest}</strong>",
+      notLocated:"nicht lokalisiert", noRestaurants:"Keine Mensen entsprechen den aktuellen Filtern",
+      back:"← Zurück zur Liste", viewMenu:"Menü anzeigen", service:"Angebot", selectService:"Angebot wählen",
+      todayMenu:"Heutiges Menü · {date}", fetchEth:"ETH-Cookpit-Menü wird geladen…",
+      noEth:"Cookpit liefert heute kein Menü für dieses Angebot. Möglicherweise Feiertag oder noch nicht publiziert.",
+      ethError:"ETH Cookpit konnte nicht geladen werden. API oder Netzwerk sind vorübergehend nicht verfügbar.",
+      openEth:"Offizielles ETH-Wochenmenü öffnen ↗", sourceEth:"Quelle: ETH Cookpit; zuerst wird der wöchentliche statische Snapshot verwendet.",
+      openMenu:"Menü in neuem Tab öffnen ↗", sourceUzh:"Quelle: UZH FOOD2050; zuerst wird der wöchentliche statische Snapshot verwendet.",
+      openOsm:"In OSM öffnen ↗", official:"Offizielle Mensa-Seite ↗", noService:"Keine Konfiguration für dieses Angebot gefunden.",
+      detailTip:"Hinweis: Menüs und Öffnungszeiten können während Semester und Ferien ändern.",
+      locating:"Standort wird ermittelt…", noGeo:"Standortbestimmung ist nicht verfügbar; Position auf der Karte anklicken.",
+      denied:"Standortzugriff wurde nicht erlaubt. Position auf der Karte anklicken.",
+      nearest:"Nächste Mensa: {name} · {distance}", confirmLocation:"Diesen Punkt für die Distanzberechnung als Standort verwenden?",
+      dataUpdated:"Menü-Snapshot aktualisiert {time} · Zeitraum {start} bis {end}", noDishes:"Im heutigen statischen Snapshot sind keine Gerichte vorhanden. Live-Menü in den Mensa-Details prüfen.",
+      imageSimilar:"Beispielbild", imageCredit:"Bild: {author} · {license}", snapshot:"Wöchentlicher Menü-Snapshot",
+      notes:"Hinweise:<br>1. Der Abendfilter prüft, ob eine Mensa Abendessen anbietet; Zeiten können ändern.<br>2. Standort und Distanzen werden nur im Browser berechnet.<br>3. Standort kann per Klick auf die Karte gesetzt werden."
+    }
+  };
+  const supportedLanguages = ["zh", "en", "de"];
+  let language = (() => {
+    try {
+      const saved = localStorage.getItem("mensa-language");
+      if (supportedLanguages.includes(saved)) return saved;
+    } catch (_) {}
+    const browserLanguage = (navigator.language || "zh").toLowerCase();
+    return browserLanguage.startsWith("de") ? "de" : browserLanguage.startsWith("en") ? "en" : "zh";
+  })();
+  const t = (key, values = {}) => String(messages[language][key] ?? messages.en[key] ?? key)
+    .replace(/\{(\w+)\}/g, (_, name) => values[name] ?? `{${name}}`);
 
   const restaurants = [
     {
@@ -428,6 +549,8 @@
   let selectedServiceType = null;
   let ethCache = null;
   let ethFetchPromise = null;
+  let menuSnapshot = null;
+  let currentView = "restaurants";
 
   const map = L.map("map", { zoomControl:true }).setView([47.3876, 8.5380], 12.8);
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -447,15 +570,143 @@
   setTimeout(fitMapToContent, 400);
 
   const listView = document.getElementById("listView");
+  const dishesView = document.getElementById("dishesView");
   const detailView = document.getElementById("detailView");
   const cardsEl = document.getElementById("cards");
   const countEl = document.getElementById("count");
   const detailEl = document.getElementById("detail");
   const quickHintEl = document.getElementById("quickHint");
   const statusbar = document.getElementById("statusbar");
+  const dishCardsEl = document.getElementById("dishCards");
+  const dishCountEl = document.getElementById("dishCount");
+  const dataStampEl = document.getElementById("dataStamp");
 
   function esc(s) {
     return String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function dishText(value) {
+    if (value == null) return "";
+    if (typeof value === "string") return value;
+    return value[language] || value.en || value.de || value.zh || "";
+  }
+
+  async function loadMenuSnapshot() {
+    try {
+      const response = await fetch(`./data/menu-week.json?v=${Date.now()}`, {cache:"no-store"});
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      menuSnapshot = await response.json();
+    } catch (_) {
+      menuSnapshot = null;
+    }
+    renderDishList();
+    if (selectedRestaurantId) openDetail(selectedRestaurantId, selectedServiceType);
+  }
+
+  function todaySnapshotDishes() {
+    const dishes = menuSnapshot?.days?.[dateISO()] || [];
+    return dishes.filter(dish => {
+      if (schoolFilter !== "ALL" && dish.school !== schoolFilter) return false;
+      if (mealFilter === "LUNCH" && dish.service !== "lunch") return false;
+      if (mealFilter === "DINNER" && dish.service !== "dinner") return false;
+      if (mealFilter === "OPEN") {
+        const restaurant = getRestaurant(dish.restaurantId);
+        if (!restaurant || !restaurantOpenNow(restaurant)) return false;
+      }
+      const q = query.trim().toLowerCase();
+      if (q && !`${dishText(dish.name)} ${dishText(dish.description)} ${dish.restaurantName} ${dish.campus}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }
+
+  function dishCardHtml(dish, compact = false) {
+    const image = dish.image || {};
+    const imageHtml = image.path && !compact
+      ? `<img class="dishImage" src="${esc(image.path)}" alt="${esc(`${t("imageSimilar")}: ${dishText(dish.name)}`)}" loading="lazy">`
+      : "";
+    const author = image.author || "Wikimedia Commons";
+    const credit = image.sourceUrl
+      ? `<div class="dishAttribution">${esc(t("imageSimilar"))}: <a href="${esc(image.sourceUrl)}" target="_blank" rel="noopener">${esc(author)}</a> · <a href="${esc(image.licenseUrl || image.sourceUrl)}" target="_blank" rel="noopener">${esc(image.license || "Commons")}</a></div>`
+      : "";
+    const flags = [dish.vegan ? "Vegan" : "", !dish.vegan && dish.vegetarian ? "Vegetarian" : ""].filter(Boolean).join(" · ");
+    const prices = (dish.prices || []).slice(0,4).map(price => `${price.group ? esc(price.group)+": " : ""}CHF ${Number(price.price).toFixed(2)}`).join(" · ");
+    return `<article class="dishCard" data-restaurant-id="${esc(dish.restaurantId)}">
+      ${imageHtml}
+      <div class="dishBody">
+        <div class="dishTop"><span class="school ${String(dish.school).toLowerCase()}">${esc(dish.school)}</span><div class="dishTitle">${esc(dishText(dish.name))}</div></div>
+        <div class="dishRestaurant">${esc(dish.restaurantName)} · ${esc(dish.campus)} · ${esc(dish.service === "dinner" ? t("dinner") : t("lunch"))}${dish.line ? ` · ${esc(dish.line)}` : ""}${flags ? ` · ${esc(flags)}` : ""}</div>
+        ${dishText(dish.description) ? `<div class="dishDesc">${esc(dishText(dish.description))}</div>` : ""}
+        ${prices ? `<div class="menuPrice">${prices}</div>` : ""}
+        ${credit}
+      </div>
+    </article>`;
+  }
+
+  function renderDishList() {
+    if (!dishCardsEl) return;
+    const dishes = todaySnapshotDishes();
+    dishCountEl.textContent = t("dishes", {n:dishes.length});
+    if (menuSnapshot) {
+      const updated = new Date(menuSnapshot.generatedAt);
+      const stamp = Number.isNaN(updated.getTime()) ? menuSnapshot.generatedAt : updated.toLocaleString(language === "zh" ? "zh-CN" : language === "de" ? "de-CH" : "en-GB");
+      dataStampEl.textContent = t("dataUpdated", {time:stamp, start:menuSnapshot.weekStart, end:menuSnapshot.weekEnd});
+    } else {
+      dataStampEl.textContent = t("snapshot");
+    }
+    dishCardsEl.innerHTML = dishes.length
+      ? dishes.map(dish => dishCardHtml(dish)).join("")
+      : `<div class="empty">${esc(t("noDishes"))}</div>`;
+    dishCardsEl.querySelectorAll("[data-restaurant-id]").forEach(card => {
+      card.addEventListener("click", event => {
+        if (event.target.closest("a")) return;
+        const dish = dishes.find(item => item.restaurantId === card.dataset.restaurantId);
+        if (dish) openDetail(dish.restaurantId, dish.service);
+      });
+    });
+  }
+
+  function renderSnapshotMenu(restaurant, service, container) {
+    const dishes = (menuSnapshot?.days?.[dateISO()] || []).filter(dish => dish.restaurantId === restaurant.id && dish.service === service.type);
+    if (!dishes.length) return false;
+    container.innerHTML = dishes.map(dish => dishCardHtml(dish, true)).join("") + `<div class="sourceNote">${esc(restaurant.school === "ETH" ? t("sourceEth") : t("sourceUzh"))}</div>`;
+    return true;
+  }
+
+  function showView(view) {
+    currentView = view === "dishes" ? "dishes" : "restaurants";
+    detailView.style.display = "none";
+    listView.style.display = currentView === "restaurants" ? "block" : "none";
+    dishesView.style.display = currentView === "dishes" ? "block" : "none";
+    document.querySelectorAll(".viewFilter").forEach(button => button.classList.toggle("active", button.dataset.view === currentView));
+    if (currentView === "dishes") renderDishList();
+  }
+
+  function applyLanguage(nextLanguage = language) {
+    language = supportedLanguages.includes(nextLanguage) ? nextLanguage : "zh";
+    try { localStorage.setItem("mensa-language", language); } catch (_) {}
+    document.documentElement.lang = language === "zh" ? "zh-CN" : language;
+    document.querySelector(".subtitle").textContent = t("subtitle");
+    document.querySelectorAll(".langFilter").forEach(button => button.classList.toggle("active", button.dataset.lang === language));
+    const schoolButtons = document.querySelectorAll(".schoolFilter");
+    if (schoolButtons[0]) schoolButtons[0].textContent = t("all");
+    const mealButtons = document.querySelectorAll(".mealFilter");
+    [[0,"all"],[1,"lunch"],[2,"dinner"],[3,"openNow"]].forEach(([index,key]) => { if (mealButtons[index]) mealButtons[index].textContent = t(key); });
+    document.getElementById("locateBtn").textContent = t("locate");
+    document.getElementById("fitBtn").textContent = t("fit");
+    document.getElementById("legendMe").textContent = t("myLocation");
+    document.querySelector("#listView h2").textContent = t("restaurantList");
+    document.getElementById("dishesTitle").textContent = t("todayDishes");
+    document.getElementById("search").placeholder = t("search");
+    document.querySelector(".footerNote").innerHTML = t("notes");
+    document.getElementById("backBtn").textContent = t("back");
+    document.querySelectorAll('.viewFilter[data-view="restaurants"]').forEach(button => button.textContent = t("restaurants"));
+    document.querySelectorAll('.viewFilter[data-view="dishes"]').forEach(button => button.textContent = t("todayDishes"));
+    document.querySelectorAll('[aria-label="学校筛选"]').forEach(el => el.setAttribute("aria-label", t("schoolFilter")));
+    document.querySelectorAll('[aria-label="餐次筛选"]').forEach(el => el.setAttribute("aria-label", t("mealFilter")));
+    document.querySelectorAll('[aria-label="内容视图"]').forEach(el => el.setAttribute("aria-label", t("contentView")));
+    renderList();
+    renderDishList();
+    if (selectedRestaurantId && detailView.style.display === "block") openDetail(selectedRestaurantId, selectedServiceType);
   }
 
   function showStatus(msg, ms = 2600) {
@@ -479,8 +730,10 @@
   }
 
   function currentMinutes() {
-    const now = new Date();
-    return now.getHours() * 60 + now.getMinutes();
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+      timeZone:"Europe/Zurich", hour:"2-digit", minute:"2-digit", hourCycle:"h23"
+    }).formatToParts(new Date()).map(part => [part.type, part.value]));
+    return Number(parts.hour) * 60 + Number(parts.minute);
   }
 
   function parseRange(hours) {
@@ -507,12 +760,17 @@
     return restaurant.services.some(s => s.type === type);
   }
 
+  function serviceLabel(service) {
+    if (service.label === "白天") return t("daytime");
+    return t(service.type === "dinner" ? "dinner" : "lunch");
+  }
+
   function getServiceBadges(restaurant) {
     const items = [];
-    if (hasService(restaurant, "lunch")) items.push(`<span class="chip">午餐</span>`);
-    if (hasService(restaurant, "dinner")) items.push(`<span class="chip dinner">晚餐</span>`);
-    if (restaurantOpenNow(restaurant)) items.push(`<span class="chip open">现在营业</span>`);
-    else items.push(`<span class="chip closed">已结束 / 未开始</span>`);
+    if (hasService(restaurant, "lunch")) items.push(`<span class="chip">${esc(t("lunch"))}</span>`);
+    if (hasService(restaurant, "dinner")) items.push(`<span class="chip dinner">${esc(t("dinner"))}</span>`);
+    if (restaurantOpenNow(restaurant)) items.push(`<span class="chip open">${esc(t("openNow"))}</span>`);
+    else items.push(`<span class="chip closed">${esc(t("closed"))}</span>`);
     return items.join("");
   }
 
@@ -534,16 +792,16 @@
   function renderQuickHint(arr) {
     const dinnerCount = arr.filter(r => hasService(r, "dinner")).length;
     const openCount = arr.filter(r => restaurantOpenNow(r)).length;
-    const nearest = (userPos && arr[0]) ? `${arr[0].name}（${fmtDist(arr[0].distance)}）` : "未定位";
-    quickHintEl.innerHTML = `当前结果中：<strong>${arr.length}</strong> 家 · 可晚餐 <strong>${dinnerCount}</strong> 家 · 现在营业 <strong>${openCount}</strong> 家 · 最近的是 <strong>${esc(nearest)}</strong>`;
+    const nearest = (userPos && arr[0]) ? `${arr[0].name} (${fmtDist(arr[0].distance)})` : t("notLocated");
+    quickHintEl.innerHTML = t("quick", {total:arr.length, dinner:dinnerCount, open:openCount, nearest:esc(nearest)});
   }
 
   function renderList() {
     const arr = filteredRestaurants();
-    countEl.textContent = `${arr.length} 家`;
+    countEl.textContent = t("places", {n:arr.length});
     renderQuickHint(arr);
     if (!arr.length) {
-      cardsEl.innerHTML = `<div class="empty">没有符合当前筛选条件的餐厅</div>`;
+      cardsEl.innerHTML = `<div class="empty">${esc(t("noRestaurants"))}</div>`;
       return;
     }
     cardsEl.innerHTML = arr.map(r => `
@@ -573,7 +831,7 @@
   }
 
   function serviceSummary(restaurant) {
-    return restaurant.services.map(s => `${s.label} ${s.hours}`).join(" · ");
+    return restaurant.services.map(s => `${serviceLabel(s)} ${s.hours}`).join(" · ");
   }
 
   function markerIcon(restaurant) {
@@ -594,15 +852,15 @@
       marker.bindPopup(() => {
         const d = userPos ? fmtDist(distanceMeters(userPos, r)) : "";
         const popupBadges = [
-          hasService(r, "lunch") ? `<span class="chip">午餐</span>` : "",
-          hasService(r, "dinner") ? `<span class="chip dinner">晚餐</span>` : "",
-          restaurantOpenNow(r) ? `<span class="chip open">现在营业</span>` : ""
+          hasService(r, "lunch") ? `<span class="chip">${esc(t("lunch"))}</span>` : "",
+          hasService(r, "dinner") ? `<span class="chip dinner">${esc(t("dinner"))}</span>` : "",
+          restaurantOpenNow(r) ? `<span class="chip open">${esc(t("openNow"))}</span>` : ""
         ].filter(Boolean).join("");
         return `
           <div class="popupName">${esc(r.name)}</div>
           <div class="popupMeta">${esc(r.school)} · ${esc(r.campus)}${d ? " · " + esc(d) : ""}<br>${esc(serviceSummary(r))}</div>
           <div class="popupServices">${popupBadges}</div>
-          <button class="popupAction" data-open-id="${esc(r.id)}">查看菜单</button>
+          <button class="popupAction" data-open-id="${esc(r.id)}">${esc(t("viewMenu"))}</button>
         `;
       });
       marker.on("popupopen", e => {
@@ -624,6 +882,7 @@
       if (!visible.has(r.id) && hasLayer) map.removeLayer(marker);
     });
     renderList();
+    renderDishList();
     fitVisible();
   }
 
@@ -640,24 +899,24 @@
     if (userMarker) map.removeLayer(userMarker);
     userMarker = L.circleMarker([lat, lng], {
       radius:8, color:"#fff", weight:3, fillColor:"#111827", fillOpacity:1
-    }).addTo(map).bindTooltip("我的位置", {direction:"top"});
+    }).addTo(map).bindTooltip(t("myLocation"), {direction:"top"});
     if (source === "gps") map.setView([lat, lng], 15, {animate:true});
     refreshMarkers();
     const nearest = filteredRestaurants()[0];
-    if (nearest) showStatus(`最近：${nearest.name} · ${fmtDist(nearest.distance)}`, 3600);
+    if (nearest) showStatus(t("nearest", {name:nearest.name, distance:fmtDist(nearest.distance)}), 3600);
     if (selectedRestaurantId) openDetail(selectedRestaurantId, selectedServiceType);
     fitVisible();
   }
 
   function locateMe() {
     if (!navigator.geolocation) {
-      showStatus("当前浏览器不支持定位，请直接点击地图设定位置。", 3500);
+      showStatus(t("noGeo"), 3500);
       return;
     }
-    showStatus("正在定位…", 5000);
+    showStatus(t("locating"), 5000);
     navigator.geolocation.getCurrentPosition(
       pos => setUserPosition(pos.coords.latitude, pos.coords.longitude, "gps"),
-      () => showStatus("定位未授权。你可以点击地图任意位置，将其设为当前位置。", 4200),
+      () => showStatus(t("denied"), 4200),
       {enableHighAccuracy:true, timeout:10000, maximumAge:30000}
     );
   }
@@ -681,15 +940,17 @@
   }
 
   function mondayISO(date = new Date()) {
-    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const day = d.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    d.setDate(d.getDate() + diff);
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    const current = dateISO(date);
+    const d = new Date(`${current}T12:00:00Z`);
+    const day = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 1 - day);
+    return d.toISOString().slice(0, 10);
   }
 
   function dateISO(date = new Date()) {
-    return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone:"Europe/Zurich", year:"numeric", month:"2-digit", day:"2-digit"
+    }).format(date);
   }
 
   function ethFallbackUrl(service) {
@@ -713,7 +974,7 @@
 
   function parseETHMenus(root, service) {
     const weekly = root?.["weekly-rota-array"] || [];
-    const dayJS = new Date().getDay();
+    const dayJS = new Date(`${dateISO()}T12:00:00Z`).getUTCDay();
     const wantedDay = dayJS === 0 ? 7 : dayJS;
     const target = service.type === "dinner" ? "dinner" : "lunch";
     const out = [];
@@ -761,16 +1022,17 @@
     return out;
   }
 
-  async function renderETHMenu(service, container) {
-    container.innerHTML = `<div class="notice">正在由你的浏览器直接请求 ETH Cookpit 菜单…</div>`;
+  async function renderETHMenu(restaurant, service, container) {
+    if (renderSnapshotMenu(restaurant, service, container)) return;
+    container.innerHTML = `<div class="notice">${esc(t("fetchEth"))}</div>`;
     try {
       const root = await loadETHRaw();
       const menus = parseETHMenus(root, service);
       if (!menus.length) {
         container.innerHTML = `
-          <div class="notice">Cookpit 今天没有返回这个餐次的菜单。可能是休息、假期时段、当前不是该餐次，或者菜单尚未发布。</div>
+          <div class="notice">${esc(t("noEth"))}</div>
           <div class="frameActions">
-            <a target="_blank" rel="noopener" href="${esc(ethFallbackUrl(service))}">打开 ETH 官方周菜单 ↗</a>
+            <a target="_blank" rel="noopener" href="${esc(ethFallbackUrl(service))}">${esc(t("openEth"))}</a>
           </div>`;
         return;
       }
@@ -784,25 +1046,27 @@
             ${m.description ? `<div class="menuDesc">${esc(m.description)}</div>` : ""}
             ${priceText ? `<div class="menuPrice">${priceText}</div>` : ""}
           </div>`;
-      }).join("") + `<div class="sourceNote">数据源：ETH Cookpit。请求是你的浏览器直接发给 idapps.ethz.ch 的，不经过你部署这个 HTML 的服务器。</div>`;
+      }).join("") + `<div class="sourceNote">${esc(t("sourceEth"))}</div>`;
     } catch (err) {
       container.innerHTML = `
-        <div class="notice error">浏览器没有成功读取 ETH Cookpit。可能是 CORS、网络策略或接口暂时不可用。</div>
+        <div class="notice error">${esc(t("ethError"))}</div>
         <div class="frameActions">
-          <a target="_blank" rel="noopener" href="${esc(ethFallbackUrl(service))}">打开 ETH 官方周菜单 ↗</a>
+          <a target="_blank" rel="noopener" href="${esc(ethFallbackUrl(service))}">${esc(t("openEth"))}</a>
         </div>`;
     }
   }
 
-  function renderUZHMenu(service, container) {
+  function renderUZHMenu(restaurant, service, container) {
+    if (renderSnapshotMenu(restaurant, service, container)) return;
+    const localizedMenuUrl = service.menuUrl.replace("/en/", language === "de" ? "/de/" : "/en/");
     container.innerHTML = `
       <div class="frameWrap">
-        <iframe class="frame" src="${esc(service.menuUrl)}" loading="eager" title="UZH menu"></iframe>
+        <iframe class="frame" src="${esc(localizedMenuUrl)}" loading="eager" title="UZH menu"></iframe>
       </div>
       <div class="frameActions">
-        <a target="_blank" rel="noopener" href="${esc(service.menuUrl)}">在新标签页打开菜单 ↗</a>
+        <a target="_blank" rel="noopener" href="${esc(localizedMenuUrl)}">${esc(t("openMenu"))}</a>
       </div>
-      <div class="sourceNote">UZH 菜单由你的浏览器直接从 app.food2050.ch 加载，不需要你自己的后端。</div>`;
+      <div class="sourceNote">${esc(t("sourceUzh"))}</div>`;
   }
 
   function openDetail(id, desiredServiceType = null) {
@@ -812,6 +1076,7 @@
     selectedServiceType = desiredServiceType || defaultServiceFor(restaurant);
 
     listView.style.display = "none";
+    dishesView.style.display = "none";
     detailView.style.display = "block";
 
     const distance = userPos ? fmtDist(distanceMeters(userPos, restaurant)) : "";
@@ -819,30 +1084,30 @@
       <div class="detailTitle">${esc(restaurant.name)}</div>
       <div class="detailMeta">
         ${esc(restaurant.school)} · ${esc(restaurant.campus)}${distance ? ` · <strong>${esc(distance)}</strong>` : ""}<br>
-        餐次：${esc(serviceSummary(restaurant))}
+        ${esc(t("service"))}: ${esc(serviceSummary(restaurant))}
       </div>
 
       <div class="slotWrap">
-        <div style="font-size:13px;font-weight:800;">选择餐次</div>
+        <div style="font-size:13px;font-weight:800;">${esc(t("selectService"))}</div>
         <div id="slotBar" class="slotBar">
           ${restaurant.services.map(s => {
-            const open = serviceOpenNow(s) ? " · 现在营业" : "";
-            return `<button class="slotBtn ${selectedServiceType === s.type ? "active" : ""}" data-slot="${esc(s.type)}">${esc(s.label)} ${esc(s.hours)}${esc(open)}</button>`;
+            const open = serviceOpenNow(s) ? ` · ${t("openNow")}` : "";
+            return `<button class="slotBtn ${selectedServiceType === s.type ? "active" : ""}" data-slot="${esc(s.type)}">${esc(serviceLabel(s))} ${esc(s.hours)}${esc(open)}</button>`;
           }).join("")}
         </div>
       </div>
 
       <div class="sectionHead">
-        <h3>今日菜单 · ${esc(dateISO())}</h3>
+        <h3>${esc(t("todayMenu", {date:dateISO()}))}</h3>
         <span class="menuState">${restaurant.school === "ETH" ? "Cookpit API" : "FOOD2050"}</span>
       </div>
       <div id="menuContainer"></div>
 
       <div class="detailActions">
-        <a target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat=${encodeURIComponent(restaurant.lat)}&mlon=${encodeURIComponent(restaurant.lng)}#map=18/${encodeURIComponent(restaurant.lat)}/${encodeURIComponent(restaurant.lng)}">在 OSM 打开 ↗</a>
-        ${restaurant.official ? `<a target="_blank" rel="noopener" href="${esc(restaurant.official)}">官方餐厅页 ↗</a>` : ""}
+        <a target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat=${encodeURIComponent(restaurant.lat)}&mlon=${encodeURIComponent(restaurant.lng)}#map=18/${encodeURIComponent(restaurant.lat)}/${encodeURIComponent(restaurant.lng)}">${esc(t("openOsm"))}</a>
+        ${restaurant.official ? `<a target="_blank" rel="noopener" href="${esc(restaurant.official)}">${esc(t("official"))}</a>` : ""}
       </div>
-      <div class="sourceNote">提示：晚餐档是否实际开放，学校可能在假期调整；如果你发现菜单为空，点官方入口核对即可。</div>
+      <div class="sourceNote">${esc(t("detailTip"))}</div>
     `;
 
     const slotBar = document.getElementById("slotBar");
@@ -853,17 +1118,16 @@
 
     const service = getService(restaurant, selectedServiceType) || restaurant.services[0];
     if (!service) {
-      menuContainer.innerHTML = `<div class="notice error">没有找到该餐次配置。</div>`;
+      menuContainer.innerHTML = `<div class="notice error">${esc(t("noService"))}</div>`;
       return;
     }
 
-    if (restaurant.school === "ETH") renderETHMenu(service, menuContainer);
-    else renderUZHMenu(service, menuContainer);
+    if (restaurant.school === "ETH") renderETHMenu(restaurant, service, menuContainer);
+    else renderUZHMenu(restaurant, service, menuContainer);
   }
 
   function backToList() {
-    detailView.style.display = "none";
-    listView.style.display = "block";
+    showView(currentView);
   }
 
   document.querySelectorAll(".schoolFilter").forEach(btn => {
@@ -893,13 +1157,23 @@
   document.getElementById("fitBtn").addEventListener("click", fitVisible);
   document.getElementById("backBtn").addEventListener("click", backToList);
 
+  document.querySelectorAll(".langFilter").forEach(btn => {
+    btn.addEventListener("click", () => applyLanguage(btn.dataset.lang));
+  });
+
+  document.querySelectorAll(".viewFilter").forEach(btn => {
+    btn.addEventListener("click", () => showView(btn.dataset.view));
+  });
+
   map.on("click", e => {
-    if (confirm("把这里设为你的当前位置，用来计算最近餐厅吗？")) {
+    if (confirm(t("confirmLocation"))) {
       setUserPosition(e.latlng.lat, e.latlng.lng, "manual");
     }
   });
 
+  applyLanguage(language);
   addMarkers();
+  loadMenuSnapshot();
   fitMapToContent();
 
   setTimeout(() => loadETHRaw().catch(() => {}), 500);
